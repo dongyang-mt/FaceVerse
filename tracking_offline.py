@@ -1,3 +1,4 @@
+from tkinter import FALSE
 import cv2
 import os
 import numpy as np
@@ -33,7 +34,8 @@ def tracking(args, device):
 
     os.makedirs(args.res_folder, exist_ok=True)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out_video = cv2.VideoWriter(os.path.join(args.res_folder, 'faceverse_tracking.mp4'), fourcc, offreader.fps, (args.tar_size * 3, args.tar_size))
+    basename = os.path.basename(args.input)
+    out_video = cv2.VideoWriter(os.path.join(args.res_folder, "faceverse_tracking.mp4"), fourcc, offreader.fps, (args.tar_size * 3, args.tar_size))
 
     frame_ind = 0
     while True:
@@ -42,10 +44,11 @@ def tracking(args, device):
         if not face_detected:
             if frame:
                 out_video.release()
-                exit()
+                # exit()
+                break
             else:
                 continue
-        
+
         # init crop parameters and optimizer
         if frame_ind == 0:
             border = 500
@@ -54,11 +57,11 @@ def tracking(args, device):
             print('First frame:', half_length, crop_center)
             rigid_optimizer, nonrigid_optimizer = init_optim_with_id(args, faceverse_model)
         frame_b = cv2.copyMakeBorder(frame, border, border, border, border, cv2.BORDER_CONSTANT, value=0)
-        align = cv2.resize(frame_b[crop_center[1] - half_length:crop_center[1] + half_length, crop_center[0] - half_length:crop_center[0] + half_length], 
+        align = cv2.resize(frame_b[crop_center[1] - half_length:crop_center[1] + half_length, crop_center[0] - half_length:crop_center[0] + half_length],
                             (args.tar_size, args.tar_size), cv2.INTER_AREA)
         resized_lms = (lms - (crop_center - half_length - border)[np.newaxis, :]) / half_length / 2 * args.tar_size
         resized_lms = resized_lms.astype(np.int64)
-        
+
         lms = torch.from_numpy(resized_lms[np.newaxis, :, :]).type(torch.float32).to(device)
         img_tensor = torch.from_numpy(align[np.newaxis, ...]).type(torch.float32).to(device)
 
@@ -68,24 +71,24 @@ def tracking(args, device):
         else:
             num_iters_rf = args.rest_rf_iters
             num_iters_nrf = args.rest_nrf_iters
-        
+
         # fitting using only landmarks
         for i in range(num_iters_rf):
             rigid_optimizer.zero_grad()
-            
+
             pred_dict = faceverse_model(faceverse_model.get_packed_tensors(), render=False, texture=False)
             lm_loss_val = losses.lm_loss(pred_dict['lms_proj'], lms, lm_weights, img_size=args.tar_size)
             exp_reg_loss = losses.get_l2(faceverse_model.get_exp_tensor())
             id_reg_loss = losses.get_l2(faceverse_model.get_id_tensor())
             total_loss = args.lm_loss_w * lm_loss_val + id_reg_loss*args.id_reg_w + exp_reg_loss*args.exp_reg_w
-            
+
             total_loss.backward()
             rigid_optimizer.step()
 
             if args.version == 2:
                 with torch.no_grad():
                     faceverse_model.exp_tensor[faceverse_model.exp_tensor < 0] *= 0
-        
+
         # fitting with differentiable rendering
         for i in range(num_iters_nrf):
             nonrigid_optimizer.zero_grad()
@@ -108,11 +111,11 @@ def tracking(args, device):
 
             loss.backward()
             nonrigid_optimizer.step()
-        
+
             if args.version == 2:
                 with torch.no_grad():
                     faceverse_model.exp_tensor[faceverse_model.exp_tensor < 0] *= 0
-        
+
         # save data
         with torch.no_grad():
             pred_dict = faceverse_model(faceverse_model.get_packed_tensors(), render=True, texture=True)
@@ -129,35 +132,58 @@ def tracking(args, device):
         if frame_ind == 0:
             start_t = time.time()
         frame_ind += 1
-        
+
         out_video.write(drive_img[:, :, ::-1])
-        #cv2.imwrite( os.path.join(args.res_folder, f'{str(frame_ind).zfill(4)}.png'), drive_img[:, :, ::-1])
+        image_folder = os.path.join(args.res_folder, "img")
+        os.makedirs(image_folder, exist_ok=True)
+        image_path = os.path.join(image_folder, f'{str(frame_ind).zfill(6)}.png')
+        cv2.imwrite(image_path, drive_img[:, :, ::-1])
         print(f'Speed:{(time.time() - start_t) / frame_ind:.4f}, {frame_ind:4} / {offreader.num_frames:4}, {total_loss.item():.4f}')
 
         if args.save_ply:
             vertices = pred_dict['vs'].detach().cpu().squeeze().numpy()
             colors = pred_dict['face_texture'].detach().cpu().squeeze().numpy()
             colors = np.clip(colors, 0, 255).astype(np.uint8)
-            output_ply = os.path.join(args.res_folder, f'{str(frame_ind).zfill(4)}.ply')
+            ply_folder = os.path.join(args.res_folder, "ply")
+            os.makedirs(ply_folder, exist_ok=True)
+            output_ply = os.path.join(ply_folder, f'{str(frame_ind).zfill(6)}.ply')
             ply_from_array_color(vertices, colors, faceverse_dict['tri'], output_ply)
-        
+
         if args.save_coeff:
             coeffs = faceverse_model.get_packed_tensors().detach().clone().cpu().numpy()
-            np.save(os.path.join(args.res_folder, f'{str(frame_ind).zfill(4)}.npy'), coeffs)
+            coeffs_folder = os.path.join(args.res_folder, "coeffs")
+            os.makedirs(coeffs_folder, exist_ok=True)
+            output_coeffs = os.path.join(coeffs_folder, f'{str(frame_ind).zfill(6)}.npy')
+            np.save(output_coeffs, coeffs)
+            out = {}
+            out['id'] = faceverse_model.get_id_tensor()
+            out['exp'] = faceverse_model.get_exp_tensor()
+            out['tex'] = faceverse_model.get_tex_tensor()
+            out['rot'] = faceverse_model.get_rot_tensor()
+            out['gamma'] = faceverse_model.get_gamma_tensor()
+            out['trans'] = faceverse_model.get_trans_tensor()
+            bs_folder = os.path.join(args.res_folder, "bs")
+            os.makedirs(bs_folder, exist_ok=True)
+            output_bs = os.path.join(bs_folder, f'{str(frame_ind).zfill(6)}.npy')
+            with open(os.path.join(output_bs), "wb") as fout:
+                import pickle
+                pickle.dump(out, fout)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="FaceVerse online tracker")
 
-    parser.add_argument('--input', type=str, required=True,
+    parser.add_argument('--input', type=str, required=False,
+                        default="example/videos/test.mp4",
                         help='input video path')
-    parser.add_argument('--use_simplification', action='store_true',
+    parser.add_argument('--use_simplification', action='store_true', default=False,
                         help='use the simplified FaceVerse model.')
-    parser.add_argument('--res_folder', type=str, required=True,
+    parser.add_argument('--res_folder', type=str, required=False,
+                        default="example/video_results",
                         help='output directory')
-    parser.add_argument('--save_ply', action="store_true",
+    parser.add_argument('--save_ply', action="store_true", default=True,
                         help='save the output ply or not')
-    parser.add_argument('--save_coeff', action="store_true",
+    parser.add_argument('--save_coeff', action="store_true", default=True,
                         help='save the output coeff or not')
     parser.add_argument('--version', type=int, default=2,
                         help='FaceVerse model version.')
@@ -195,7 +221,24 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     device = 'cuda'
-    
-    tracking(args, device)
+    # args.input = "/opt/data/dongyang/data/blendshape_0826/data_train_lip/20220703_MySlate_12/MySlate_12_柯先生的iPhone.mov"
+    # args.res_folder = "blendshape_0915/20220703_MySlate_12"
+    # tracking(args, device)
+    import glob
+
+    train_paths = '/opt/data/dongyang/data/blendshape_0826/'
+    # val_paths = '/opt/data/dongyang/data/blendshape_0826/data_eval/*'
+
+    # for train_name in ["data_train_blink_mouth", "data_train_calibrated", "data_train_eyeclose", "data_train_lip", "data_train_no_calib", "data_train_public"]:
+    for train_name in ["data_train_calibrated", "data_train_eyeclose", "data_train_lip", "data_train_no_calib", "data_train_public"]:
+        train_folder = os.path.join(train_paths, train_name)
+        for subname in os.listdir(train_folder):
+            subtrain_folder = os.path.join(train_folder, subname)
+            try:
+                args.input = glob.glob(os.path.join(subtrain_folder, "*.mov"))[0]
+                args.res_folder = os.path.join("blendshape_0915", train_name, subname)
+                tracking(args, device)
+            except:
+                print(subtrain_folder)
 
 

@@ -44,6 +44,13 @@ Please download the zip file of **version 0** or **version 1** (recommended) and
 ```
 python tracking_online.py  --version 2 --use_simplification
 python tracking_offline.py --input example/videos/test.mp4 --res_folder example/video_results --version 2 --use_simplification
+
+python tracking_offline.py --input /opt/data/dongyang/code/DaGAN/project/metahuman.mp4 --res_folder /opt/data/dongyang/code/FaceVerse/example/metahuman --version 2 --use_simplification
+python tracking_offline.py --input /opt/data/dongyang/code/DaGAN/project/dongyang.mp4 --res_folder /opt/data/dongyang/code/FaceVerse/example/dongyang --version 2 --use_simplification
+python tracking_offline.py --input /opt/data/dongyang/code/DaGAN/project/video1.mp4 --res_folder /opt/data/dongyang/code/FaceVerse/example/video1 --version 2 --use_simplification
+python tracking_offline.py --input /opt/data/dongyang/code/DaGAN/project/video2.mp4 --res_folder /opt/data/dongyang/code/FaceVerse/example/video2 --version 2 --use_simplification
+python tracking_offline.py --input /opt/data/dongyang/code/DaGAN/project/meta_human_woman.mp4 --res_folder /opt/data/dongyang/code/FaceVerse/example/meta_human_woman --version 2 --use_simplification
+
 ```
 
 - Refine the shape of the base PCA model: orthogonalization.
@@ -58,7 +65,7 @@ python tracking_offline.py --input example/videos/test.mp4 --res_folder example/
 - Python 3.9
 - PyTorch 1.11.0
 - torchvision 0.11.1
-- PyTorch3D 0.6.0 
+- PyTorch3D 0.6.0
 - Cuda 11.3
 - ONNX Runtime
 - OpenCV
@@ -75,13 +82,14 @@ python3 setup.py install
 
 
 ## Single-image fitting
-Reconstructing a 3D face from a single image. There are three processes: 
+Reconstructing a 3D face from a single image. There are three processes:
 (a) reconstructed by PCA model; (b) refined by the detailed generator; (c) refined by the expression generator.
 
 An example input with a image folder (sampled from the [FFHQ](https://github.com/NVlabs/ffhq-dataset) dataset):
 
 ```
 python3 fit_images.py --version 1 --input example/images --res_folder example/image_results --save_ply --align
+python3 fit_images.py --version 2 --input example/images --res_folder example/image_results_version2 --save_ply --align
 ```
 
 Note: the detailed refinement is based on differentiable rendering, which is quite time-consuming (over 10 minutes). `--align` is used to crop the input image.

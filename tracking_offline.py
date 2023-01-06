@@ -173,6 +173,34 @@ def tracking(args, device):
 def run(args):
     tracking(args, args.device)
 
+def test_videos():
+    # args.input = "/opt/data/dongyang/data/blendshape_0826/data_train_lip/20220703_MySlate_12/MySlate_12_柯先生的iPhone.mov"
+    # args.res_folder = "blendshape_0915/20220703_MySlate_12"
+    # tracking(args, device)
+    import glob
+
+    train_paths = '/opt/data/dongyang/data/blendshape_0826/'
+    # val_paths = '/opt/data/dongyang/data/blendshape_0826/data_eval/*'
+    args_list = []
+    # for train_name in ["data_train_blink_mouth", "data_train_calibrated", "data_train_eyeclose", "data_train_lip", "data_train_no_calib", "data_train_public"]:
+    for train_name in ["data_train_no_calib", "data_train_public", "data_train_lip"]:
+        train_folder = os.path.join(train_paths, train_name)
+        for subname in os.listdir(train_folder):
+            subtrain_folder = os.path.join(train_folder, subname)
+            try:
+                args.input = glob.glob(os.path.join(subtrain_folder, "*.mov"))[0]
+                args.res_folder = os.path.join("blendshape_0920", train_name, subname)
+                if os.path.exists(args.res_folder):
+                   continue
+                args.device = "cuda:" + str(len(args_list)%8)
+                args_list.append(deepcopy(args))
+            except:
+                print(subtrain_folder)
+    print(len(args_list))
+    print(args_list)
+    from multiprocessing import Pool
+    with Pool(32) as p:
+        p.map(run, args_list)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="FaceVerse online tracker")
@@ -225,30 +253,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     device = 'cuda'
-    # args.input = "/opt/data/dongyang/data/blendshape_0826/data_train_lip/20220703_MySlate_12/MySlate_12_柯先生的iPhone.mov"
-    # args.res_folder = "blendshape_0915/20220703_MySlate_12"
-    # tracking(args, device)
-    import glob
+    # args.input = "/opt/data/dongyang/code/FaceVerse/example/videos/test.mp4"
+    # args.res_folder = "FaceVerse_result"
 
-    train_paths = '/opt/data/dongyang/data/blendshape_0826/'
-    # val_paths = '/opt/data/dongyang/data/blendshape_0826/data_eval/*'
-    args_list = []
-    # for train_name in ["data_train_blink_mouth", "data_train_calibrated", "data_train_eyeclose", "data_train_lip", "data_train_no_calib", "data_train_public"]:
-    for train_name in ["data_train_no_calib", "data_train_public", "data_train_lip"]:
-        train_folder = os.path.join(train_paths, train_name)
-        for subname in os.listdir(train_folder):
-            subtrain_folder = os.path.join(train_folder, subname)
-            try:
-                args.input = glob.glob(os.path.join(subtrain_folder, "*.mov"))[0]
-                args.res_folder = os.path.join("blendshape_0920", train_name, subname)
-                if os.path.exists(args.res_folder):
-                   continue
-                args.device = "cuda:" + str(len(args_list)%8)
-                args_list.append(deepcopy(args))
-            except:
-                print(subtrain_folder)
-    print(len(args_list))
-    print(args_list)
-    from multiprocessing import Pool
-    with Pool(32) as p:
-        p.map(run, args_list)
+    tracking(args, device)

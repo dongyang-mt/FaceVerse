@@ -1,3 +1,4 @@
+from copy import deepcopy
 from tkinter import FALSE
 import cv2
 import os
@@ -169,6 +170,9 @@ def tracking(args, device):
                 import pickle
                 pickle.dump(out, fout)
 
+def run(args):
+    tracking(args, args.device)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="FaceVerse online tracker")
@@ -228,17 +232,23 @@ if __name__ == '__main__':
 
     train_paths = '/opt/data/dongyang/data/blendshape_0826/'
     # val_paths = '/opt/data/dongyang/data/blendshape_0826/data_eval/*'
-
+    args_list = []
     # for train_name in ["data_train_blink_mouth", "data_train_calibrated", "data_train_eyeclose", "data_train_lip", "data_train_no_calib", "data_train_public"]:
-    for train_name in ["data_train_calibrated", "data_train_eyeclose", "data_train_lip", "data_train_no_calib", "data_train_public"]:
+    for train_name in ["data_train_no_calib", "data_train_public", "data_train_lip"]:
         train_folder = os.path.join(train_paths, train_name)
         for subname in os.listdir(train_folder):
             subtrain_folder = os.path.join(train_folder, subname)
             try:
                 args.input = glob.glob(os.path.join(subtrain_folder, "*.mov"))[0]
-                args.res_folder = os.path.join("blendshape_0915", train_name, subname)
-                tracking(args, device)
+                args.res_folder = os.path.join("blendshape_0920", train_name, subname)
+                if os.path.exists(args.res_folder):
+                   continue
+                args.device = "cuda:" + str(len(args_list)%8)
+                args_list.append(deepcopy(args))
             except:
                 print(subtrain_folder)
-
-
+    print(len(args_list))
+    print(args_list)
+    from multiprocessing import Pool
+    with Pool(32) as p:
+        p.map(run, args_list)
